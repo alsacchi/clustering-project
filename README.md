@@ -15,5 +15,5 @@ Andrea Sacchi Algorithms for Massive Dataset clustering project.
 | SEED | Random number generator seed | None |
 
 # Optimization for Google Colab
-Google colab run time with RANDOM_INTI set to False is ~28 minutes, by setting it to TRUE it's possible to halve the runtime by initializing the algorithm with random centroids.
+Google colab run time with RANDOM_INIT set to False is ~28 minutes, by setting it to TRUE it's possible to halve the runtime by initializing the algorithm with random centroids.
 
