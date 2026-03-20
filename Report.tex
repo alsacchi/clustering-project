@@ -16,45 +16,37 @@
 \counterwithout{section}{chapter}
 \maketitle
 
-% the considered version of the dataset  (in terms of access date, as the dataset might be updated frequently), and the parts of the latter which have been considered,
-% how data have been organized,
-% the applied pre-processing techniques,
-% the considered algorithms and their implementations,
-% how the proposed solution scales up with data size,
-% a description of the experiments,
-% comments and discussion on the experimental results.
-
-
 \section{Project Idea}
-After reading all the available project ideas, I started thinking about the Clustering problem: is it possible to determine the "category" (\verb|section|) of an article just by clustering them? This question led me to explore several challenges, from how to represent the data, to the implementation details, and finally to the experiments.
+After reading all the available project ideas, I started thinking about the clustering problem: is it possible to determine the "category" (\verb|section|) of an article just by clustering its text? This question led me to explore several challenges, from how to represent the data, to the implementation details, and finally the execution of experiments.
 
 \section{Dataset}
-The dataset used in this project is a collection of the New York Times articles and comments from 2020. As said by the author it was scraped directly from the journal website using their API. 
+The dataset used in this project is a collection of New York Times articles and comments from 2020. As stated by the author, it was scraped directly from the journal's website using their API. 
 \\
-This project use only the provided article dataset that are 16787. Every article record is described as a row of a CSV document, most important feature are:
+This project uses only the provided articles dataset, which consists of 16,787 records. Every article record is described as a row in a CSV document; the most important features are:
 \begin{itemize}
-    \item \verb|newsdesk|: Newspaper department that wrote the article, ex: "Politics" 
-    \item \verb|section|: Specialized deparment inside the newsdesk, ex: "U.S Politics"
-    \item \verb|abstract|: A summary of the content of the article
+    \item \verb|newsdesk|: The newspaper department that wrote the article, e.g., "Politics".
+    \item \verb|section|: A specialized department inside the newsdesk, e.g., "U.S Politics".
+    \item \verb|abstract|: A summary of the article's content.
 \end{itemize}
-The dataset was accesed the first time in march 11 march 2026, no update occured since then.
+The dataset was first accessed on March 11, 2026, and no updates have occurred since then.
+
 \section{Extracting Features}
 By inspecting the article dataset, we can see the \verb|abstract| column: each record in this column is a sequence of words, including symbols and punctuation. 
 \\
-This sequence of letters, symbols and punctuation can't be processed directly by a clustering algorithm. A cleaning and tokenization process is required before any further operation.
+This sequence of letters, symbols, and punctuation cannot be processed directly by a clustering algorithm. A cleaning and tokenization process is required before any further operation.
 \\
-I decided to perform tokenization at word level, splitting by the space character. Right before the split, I removed the space in the expression \verb|New York| so that \verb|NewYork| is treated as a single token to preserve it's meaning.
+I decided to perform tokenization at the word level, splitting by the space character. Right before the split, I removed the space in the expression \verb|New York| so that \verb|NewYork| is treated as a single token to preserve its meaning.
 Each token is then normalized by removing every character that is not a lowercase ASCII letter, using the regular expression \verb|[^a-z]+|.
-The last normalization step is done by removing words, called stopwords, that do not add semantic information and appear very frequently across articles. 
+The last normalization step is performed by removing words called "stopwords" that do not add semantic information and appear very frequently across articles. 
 
-\subsection{From article to vector}
-Clustering algorithms work by operating on points in a Euclidean space, this means that the tokenization process alone is not sufficient for the algorithms. Every article \verb|abstract| needs to be transformed into a vector.
+\subsection{From Article to Vector}
+Clustering algorithms work by operating on points in a Euclidean space; this means that the tokenization process alone is not sufficient. Every article \verb|abstract| needs to be transformed into a vector.
 \\
 To perform this operation, I started by building a global vocabulary containing all the unique tokens present across the entire dataset of \verb|abstracts|. It is crucial to manage the size of the vocabulary, as an excessively large vocabulary can lead to sparsity issues. I arbitrarily decided to fix the dimension of the vocabulary to the 500 most popular words.
 \\
-Once the vocabulary is built, each article is mapped to a vector of the same length as the vocabulary. Each dimension of the vector corresponds to a specific word in the vocabulary, and its value represents the frequency of that word in the specific abstract. This representation is known as the Bag of Words model, it disregards the order of the words (grammar and syntax) but captures their overall occurrence, allowing distance based algorithms to compare the lexical overlap between different articles.
+Once the vocabulary is built, each article is mapped to a vector of the same length as the vocabulary. Each dimension of the vector corresponds to a specific word in the vocabulary, and its value represents the frequency of that word in the specific abstract. This representation is known as the Bag of Words model; it disregards the order of the words (grammar and syntax) but captures their overall occurrence, allowing distance-based algorithms to compare the lexical overlap between different articles.
 \\
-Vector rapresentation:
+Vector representation:
 \\
 \[
 \mathbf{x}^{(a)} = \left(x^{(a)}_1, x^{(a)}_2, \dots, x^{(a)}_N\right),
@@ -62,20 +54,19 @@ Vector rapresentation:
 where \(N\) is the vocabulary size and \(x^{(a)}_i\) is the (normalized) frequency of token \(i\) in article \(a\).
 
 \subsection{Implementation}
-
-My implementation for extracting the feature from the dataset utilize the Pyspark RDD (Resilient Distributed Dataset) to handle the normalization process in a distributed environment.
+My implementation for extracting features from the dataset utilizes PySpark RDDs (Resilient Distributed Datasets) to handle the normalization process in a distributed environment.
 \\
 First, I defined the list of stopwords and broadcasted it to all worker nodes to optimize memory usage.
 \\
-The vocabulary generation is achieved via a MapReduce pipeline: abstracts are tokenized using \verb|flatMap| by splitting every abstract by the space character, normalized via regular expressions, and filtered against the stopwords. 
+The vocabulary generation is achieved via a MapReduce pipeline: abstracts are tokenized using \verb|flatMap| by splitting each abstract by the space character, normalized via regular expressions, and filtered against the stopwords. 
 Then, \verb|reduceByKey| aggregates the word counts, allowing me to extract the top $N$ most frequent words.
 \\
-Once the vocabulary is generated, a dictionary is built mapping each token to it's vocabulary index \verb|bow_map_index: token -> index| (and its inverse for interpretation) and broadcasted it to executors as \verb|bag_of_words_bcast|. 
+Once the vocabulary is generated, a dictionary is built mapping each token to its vocabulary index (\verb|bow_map_index: token -> index|) and its inverse for interpretation, which is then broadcasted to executors as \verb|bag_of_words_bcast|. 
 \\
-Then each article abstract is converted to a vector by a function called \verb|abstract_vectorinit|. This function does a second distributed pass by applying the same tokenization rule and for every valid token found in \verb|bow_map_index| I increment the corresponding coordinate in a vector of length $N$.  
-After counting, I apply length normalization by dividing each coordinate by the number of matched tokens (\verb|words_found|), so vectors represent relative frequencies and are less biased by abstract length. Empty vectors are removed with \verb|filter(lambda x: sum(x) > 0)|. Finally, the vectorized abstract RDD is cached with \verb|persist| to avoid recomputation.
+Each article abstract is then converted to a vector by a function called \verb|abstract_vectorinit|. This function performs a second distributed pass by applying the same tokenization rules. For every valid token found in \verb|bow_map_index|, it increments the corresponding coordinate in a vector of length $N$.  
+After counting, I apply length normalization by dividing each coordinate by the number of matched tokens (\verb|words_found|), so vectors represent relative frequencies and are less biased by abstract length. Empty vectors are removed with \verb|filter(lambda x: sum(x) > 0)|. Finally, the vectorized abstract RDD is cached using \verb|persist| to avoid recomputation.
 
-\section{KMeans Algorithm}
+\section{K-Means Algorithm}
 The best-known point-assignment algorithm is K-Means. It assumes a Euclidean space and requires that the number of clusters $k$ is known in advance. The algorithm is simple and proceeds as follows:
 \begin{enumerate}
     \item Initially choose $k$ points to be the centroids of the clusters.
@@ -91,7 +82,6 @@ To give the algorithm a good starting point, we must pick initial centroids that
 \end{enumerate}
 
 \section{Implementation}
-
 The K-Means algorithm is implemented in Python using PySpark to handle distributed data processing. The implementation is encapsulated in a \texttt{KMeans} class, which maintains the state of the centroids and iteratively refines them.
 
 \subsection{Distance Metric}
@@ -116,38 +106,39 @@ The aggregated result is returned to the driver, where each summed vector is div
 \\
 This process repeats until the maximum number of iterations ($\texttt{iterations}$) is reached.
 
-\section{How the algorithm scale}
-The proposed solution handles large-scale data by leveraging Spark distributed computing capabilities. 
+\section{How the Algorithm Scales}
+The proposed solution handles large-scale data by leveraging Spark's distributed computing capabilities. 
 \\
-The text tokenization, normalization, and Bag of Words feature extraction are fully parallelized using Spark RDDs, distributing operations like \verb|map|, \verb|flatMap|, and \verb|filter| across the cluster worker nodes. Instead of sending the vocabulary mapping and the K-Means cluster centroids to every task individually, they are shared using broadcast variables. This ensures that a read-only copy is cached on each node exactly once, heavily reducing network traffic and memory overhead. 
+The text tokenization, normalization, and Bag of Words feature extraction are fully parallelized using Spark RDDs, distributing operations like \verb|map|, \verb|flatMap|, and \verb|filter| across the cluster's worker nodes. Instead of sending the vocabulary mapping and the K-Means cluster centroids to every task individually, they are shared using broadcast variables. This ensures that a read-only copy is cached on each node exactly once, heavily reducing network traffic and memory overhead. 
 \\
-Because the iterative nature of K-Means requires multiple passes over the dataset, the vectorizer RDD is explicitly persisted using memory and disk deserialization to avoid recomputing the Bag of Words vectors in each iteration. 
+Because the iterative nature of K-Means requires multiple passes over the dataset, the vectorized RDD is explicitly persisted using memory and disk deserialization to avoid recomputing the Bag of Words vectors in each iteration. 
 \\
-But there is a limitation to this scaling, that is at each step the articles get iterated each time. This implementation can scale memory wise but have some limitation with the number of centroid.
+However, there is a limitation to this scaling: the entire dataset must be iterated over at each step. While this implementation scales well in terms of memory, it has performance limitations mapped to the number of centroids and iterations.
 
 \section{Experiment and Results}
 The experimental workflow is organized to evaluate both the quality of the learned clusters and the correctness of the custom distributed implementation.
-\subsection{KMeans experiment}
-First I trained my custom KMeans implementation on the vectorized abstract articles, the number of cluster is set to the number of distinct \verb|section| values in the dataset and the iterations is set to twenty.
+
+\subsection{K-Means Experiment}
+First, I trained my custom K-Means implementation on the vectorized article abstracts; the number of clusters was set to the number of distinct \verb|section| values in the dataset, and the iterations were set to twenty.
 \\
-After fitting the model the model seem to converge, this is indicated by the centroids moovement printed as a debug operation during each iteration. With the model converged we can start to analyze the results.
+After fitting, the model seems to converge. This is indicated by the centroid movement, printed as a debug operation during each iteration. With the model converged, we can start analyzing the results.
 \\
-To get a first evaluation of the algorithm, for every centroid vector I sorted its coordinates in descending order and took the first ten indices. Using the inverse Bag of Words map (\verb|index -> token|), each index is converted back to the corresponding word and printed. 
+To get an initial evaluation of the algorithm, for every centroid vector, I sorted its coordinates in descending order and took the first ten indices. Using the inverse Bag of Words map (\verb|index -> token|), each index is converted back to the corresponding word and printed. 
 \\
-This print is useful because it gives an immediate interpretation of every cluster, if the most weighted words are coherent, the centroid is capturing a topic.
+This output is useful because it provides an immediate interpretation of every cluster; if the mostly highly-weighted words are coherent, the centroid is successfully capturing a topic.
 \\
-After this, I performed an external comparison with the true \verb|section| labels of the articles. Each abstract vector was assigned to its nearest learned centroid, producing pairs \verb|(Cluster\_ID, Section)|. I then computed a contingency table between predicted clusters and real sections. The table highlights one dominant cluster that behaves like a "black hole",  aggregating a large fraction of points, but it also shows that some clusters are characterized by a higher concentration of specific sections, suggesting a topic.
+Following this, I performed an external comparison with the true \verb|section| labels of the articles. Each abstract vector was assigned to its nearest learned centroid, producing \verb|(Cluster\_ID, Section)| pairs. I then computed a contingency table between predicted clusters and real sections. The table highlights one dominant cluster that behaves like a "black hole", aggregating a large fraction of points. However, it also shows that some clusters are characterized by a higher concentration of specific sections, suggesting distinct topics.
 \\
-To summarize even more this relation I extracted the dominant section for each cluster, and for each cluster i printed 10 points assigned to that cluster. This shows clearly that multiple cluster get assigned to the same section, suggesting that the model assign articles with the same section to multiple cluster.
+To summarize this relationship further, I extracted the dominant section for each cluster and printed ten points assigned to it. This clearly shows that multiple clusters get assigned to the same section, suggesting the model separates articles belonging to the same section into distinct sub-clusters based on text features.
 \\
-Finally, I repeated the clustering on the same vectors using the Spark KMeans implementation. The official Spark model was configured with the same parameters as my implementation, leading to similar results as my implementation.
-It showed similar behaviour, it's clear that with this parameters there is a cluster that behaves like a "black hole".
-\section{Comment}
-Overall, the project demonstrates a working distributed KMeans implementation that produces results comparable to the official Spark version. 
+Finally, I repeated the clustering on the same vectors using the official Spark K-Means implementation. This model was configured with the same parameters as my implementation and yielded similar results. It exhibited similar behavior, confirming that with these algorithmic parameters, there is typically a cluster acting as a "black hole."
+
+\section{Conclusion}
+Overall, the project show a working distributed K-Means implementation that produces results comparable to the official Spark version. 
 \\
 There is clear room for improvement at several stages. 
 \\
 The article to vector representation could be enhanced by adopting more advanced techniques, such as embeddings from pretrained language models like BERT, which may capture semantic relationships more effectively than the Bag of Words approach.
 \\
-Additionally, further experimentation with the number of clusters $K$ and more systematic evaluation metrics could provide deeper insights into the clustering quality and the underlying data structure.
+Additionally, further experimentation with the parameters of the project, such the number of clusters $K$ or the vector length, could provide improvement to the clustering result quality.
 \end{document}
