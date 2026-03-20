@@ -8,7 +8,7 @@ Andrea Sacchi Algorithms for Massive Dataset clustering project.
 # PARAMETERS
 | Name | Description | Default Value |
 | - | - | - |
-| SAMPLE | Enable or Disable sampling | True |
+| SAMPLE | Enable or Disable sampling (Will halve the dataset) | True |
 | RANDOM_INIT | Enable or Disable the KMeans++ initialization | False |
 | ABSTRACT_VECTOR_LENGTH | Length of the vector that represent an article | 500 | 
 | ITERATIONS | Number of iteration for the clustering algorithm | 20 |
