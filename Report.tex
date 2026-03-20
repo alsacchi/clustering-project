@@ -36,7 +36,7 @@ By inspecting the article dataset, we can see the \verb|abstract| column: each r
 This sequence of letters, symbols, and punctuation cannot be processed directly by a clustering algorithm. A cleaning and tokenization process is required before any further operation.
 \\
 I decided to perform tokenization at the word level, splitting by the space character. Right before the split, I removed the space in the expression \verb|New York| so that \verb|NewYork| is treated as a single token to preserve its meaning.
-Each token is then normalized by removing every character that is not a lowercase ASCII letter, using the regular expression \verb|[^a-z]+|.
+Each token is then lowered and normalized by removing every character that is not a lowercase ASCII letter, using the regular expression \verb|[^a-z]+|.
 The last normalization step is performed by removing words called "stopwords" that do not add semantic information and appear very frequently across articles. 
 
 \subsection{From Article to Vector}
@@ -74,11 +74,15 @@ The best-known point-assignment algorithm is K-Means. It assumes a Euclidean spa
     \item Adjust the centroid of that cluster to account for the new point.
 \end{enumerate}
 
-\subsection{Initializing Clusters for K-Means}
-To give the algorithm a good starting point, we must pick initial centroids that have a good chance of lying in different clusters. A very effective approach is to pick points that are as far away from one another as possible:
+\subsection{Initializing Clusters with K-Means++}
+To give the algorithm a good starting point, it's necessary to pick initial centroids that have a good chance of lying in different clusters. The K-Means++ initialization strategy addresses this by selecting points that are far apart and representative of the data distribution:
 \begin{enumerate}
-    \item Pick the first point at random.
-    \item While there are fewer than $k$ points, add the point whose minimum distance from the already selected points is as large as possible.
+    \item Pick the first centroid uniformly at random from the dataset.
+    \item For each subsequent centroid (until $k$ centroids are chosen):
+    \begin{enumerate}
+        \item Compute the distance from each point to its nearest already-selected centroid.
+        \item Select the next centroid with probability proportional to the squared distance.
+    \end{enumerate}
 \end{enumerate}
 
 \section{Implementation}
