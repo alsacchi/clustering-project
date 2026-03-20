@@ -1,0 +1,14 @@
+services:
+  notebook:
+    image: quay.io/jupyter/pyspark-notebook:latest
+    userns_mode: keep-id
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/home/jovyan/work:z
+    env_file:
+      - .env
+    environment:
+      - CHOWN_HOME=yes
+      - CHOWN_HOME_OPTS=-R
+    working_dir: /home/jovyan/work

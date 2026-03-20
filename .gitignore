@@ -1,0 +1,6 @@
+.vscode
+.env
+spark
+nytdataset
+*.aux
+*.log
